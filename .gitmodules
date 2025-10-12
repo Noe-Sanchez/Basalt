@@ -1,0 +1,12 @@
+[submodule "Eredin"]
+	path = Eredin
+	url = https://github.com/Noe-Sanchez/Eredin
+[submodule "Aphelion"]
+	path = Aphelion
+	url = https://github.com/Noe-Sanchez/Aphelion
+[submodule "Luminol"]
+	path = Luminol
+	url = https://github.com/Noe-Sanchez/Luminol
+[submodule "tello_vicon"]
+	path = tello_vicon
+	url = https://github.com/Noe-Sanchez/tello_vicon
