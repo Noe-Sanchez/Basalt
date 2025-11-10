@@ -13,7 +13,7 @@ def generate_launch_description():
 
   for i in range(num_drones):
     control_node = Node(
-      package="basalt_sitl",
+      package="basalt_sim",
       executable="control_node",
       name=f"control_node_{i+1}",
       output="screen",
@@ -27,7 +27,7 @@ def generate_launch_description():
                             executable="parameter_bridge",
                             name="ros_gz_bridge",
                             output="screen",
-                            parameters=[{"config_file": os.path.join(get_package_share_directory("basalt_sitl"), "config", "bridge_config.yaml")}],
+                            parameters=[{"config_file": os.path.join(get_package_share_directory("basalt_sim"), "config", "bridge_config.yaml")}],
                            )
 
   nodes.append(ros_gz_bridge_node)

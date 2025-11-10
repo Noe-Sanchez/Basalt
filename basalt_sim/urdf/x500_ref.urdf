@@ -1,5 +1,5 @@
-<robot name="x500">
-  <link name="x500">
+<robot name="x500_ref">
+  <link name="x500_ref">
     <visual>
       <origin xyz="0 0 0" rpy="0 0 1.57"/>
       <geometry>
