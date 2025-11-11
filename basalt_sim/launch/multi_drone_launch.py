@@ -19,6 +19,8 @@ def generate_launch_description():
       output="screen",
       remappings=[("/control_1/reference/pose",   f"/control_{i+1}/reference/pose"),
                   ("/model/x500_1/odometry",      f"/model/x500_{i+1}/odometry"),
+                  ("/control_1/control_force",    f"/control_{i+1}/control_force"),
+                  ("/control_1/error",            f"/control_{i+1}/error"),
                   ("/x500_1/command/motor_speed", f"/x500_{i+1}/command/motor_speed"),],
     )
     nodes.append(control_node)
