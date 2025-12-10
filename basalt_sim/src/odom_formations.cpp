@@ -29,9 +29,9 @@ class Formations2 : public rclcpp::Node{
 	follower_tfs.push_back(geometry_msgs::msg::TransformStamped());
 	follower_tfs[i].header.frame_id = "leader";
 	follower_tfs[i].child_frame_id = "follower_" + std::to_string(i+1);
-	follower_tfs[i].transform.translation.x = (i+1) * 1.0; // 1 meter apart in y direction
+	follower_tfs[i].transform.translation.x = (i * 2.0) - 2; // 1 meter apart in y direction
 	follower_tfs[i].transform.translation.y = 0.0;
-	follower_tfs[i].transform.translation.z = 2.0;
+	follower_tfs[i].transform.translation.z = 0.0;
 	follower_tfs[i].transform.rotation.x = 0.0;
 	follower_tfs[i].transform.rotation.y = 0.0;
 	follower_tfs[i].transform.rotation.z = 0.0;
@@ -39,12 +39,13 @@ class Formations2 : public rclcpp::Node{
       }
 
       // Subscribers
-      desired_formation_subscriber   = this->create_subscription<geometry_msgs::msg::PoseArray>("/formation/defintion", 10, std::bind(&Formations2::formation_callback,     this, std::placeholders::_1));
+      desired_formation_subscriber   = this->create_subscription<geometry_msgs::msg::PoseArray>("/formation/definition", 10, std::bind(&Formations2::formation_callback,     this, std::placeholders::_1));
       formation_dot_subscriber       = this->create_subscription<geometry_msgs::msg::PoseArray>("/formation/velocity",  10, std::bind(&Formations2::formation_dot_callback, this, std::placeholders::_1));
       desired_leader_pose_subscriber = this->create_subscription<nav_msgs::msg::Odometry>("/leader/state",              10, std::bind(&Formations2::leader_pose_callback,   this, std::placeholders::_1));
 
       // Timer 
-      control_timer = this->create_wall_timer(50ms, std::bind(&Formations2::control_callback, this));
+      //control_timer = this->create_wall_timer(50ms, std::bind(&Formations2::control_callback, this));
+      control_timer = this->create_wall_timer(10ms, std::bind(&Formations2::control_callback, this));
 
       // Dynamic odom publishers
       for (int i = 0; i < num_drones; i++){
@@ -80,6 +81,7 @@ class Formations2 : public rclcpp::Node{
       leader_tf.transform.translation.y = msg->pose.pose.position.y;
       leader_tf.transform.translation.z = msg->pose.pose.position.z;
       leader_tf.transform.rotation = msg->pose.pose.orientation;
+      leader_odom = *msg;
     }
     void formation_dot_callback(const geometry_msgs::msg::PoseArray::SharedPtr msg){
       // Currently not used, but can be implemented for velocity control
@@ -100,6 +102,9 @@ class Formations2 : public rclcpp::Node{
 	follower_odom_msgs[i].pose.pose.position.z = leader_tf.transform.translation.z + follower_tfs[i].transform.translation.z;
 	// Orientation (simple addition, may need quaternion multiplication for real applications)
 	follower_odom_msgs[i].pose.pose.orientation = leader_tf.transform.rotation;
+
+	// Velocity (leader for now)
+	follower_odom_msgs[i].twist.twist = leader_odom.twist.twist;
 
 	// Publish follower odometry
 	follower_odom_publishers[i]->publish(follower_odom_msgs[i]);

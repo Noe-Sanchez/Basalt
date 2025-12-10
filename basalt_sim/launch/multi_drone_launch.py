@@ -11,6 +11,10 @@ def generate_launch_description():
   
   nodes = []
 
+  bridge_config_path = os.path.join(get_package_share_directory("basalt_sim"), "config", "bridge_config.yaml")
+  with open(bridge_config_path, "w") as f:
+    f.write("")
+
   for i in range(num_drones):
     control_node = Node(
       package="basalt_sim",
@@ -24,6 +28,11 @@ def generate_launch_description():
                   ("/x500_1/command/motor_speed", f"/x500_{i+1}/command/motor_speed"),],
     )
     nodes.append(control_node)
+
+    # Append entries to ros_gz_bridge config file
+    bridge_config_path = os.path.join(get_package_share_directory("basalt_sim"), "config", "bridge_config.yaml")
+    with open(bridge_config_path, "a") as f:
+      f.write(f'- topic_name:     "/x500_{i+1}/command/motor_speed"\n  ros_type_name:  "actuator_msgs/msg/Actuators"\n  gz_type_name:   "gz.msgs.Actuators"\n  direction:      ROS_TO_GZ\n\n- topic_name:     "/model/x500_{i+1}/odometry"\n  ros_type_name:  "nav_msgs/msg/Odometry"\n  gz_type_name:   "gz.msgs.Odometry"\n  direction:      GZ_TO_ROS\n\n')
 
   ros_gz_bridge_node = Node(package="ros_gz_bridge",
                             executable="parameter_bridge",

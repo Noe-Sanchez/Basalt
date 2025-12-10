@@ -14,11 +14,23 @@
 #include "std_msgs/msg/bool.hpp"
 #include "geometry_msgs/msg/wrench.hpp"
 
+double sign(double x){
+  if (x > 0) {
+    return 1.0;
+  } else if (x < 0) {
+    return -1.0;
+  } else {
+    return 0.0;
+  }
+}
+
 using namespace std::chrono_literals;
 
 class EController : public rclcpp::Node{
   public:
     EController(): Node("control_node"){
+      // Namespace for tf
+      this->declare_parameter<std::string>("tf_namespace", "x500_1");
 
       // Subscribers
       sim_pose_subscriber     = this->create_subscription<nav_msgs::msg::Odometry>("/model/x500_1/odometry",    10, std::bind(&EController::sim_pose_callback,     this, std::placeholders::_1));
@@ -27,6 +39,7 @@ class EController : public rclcpp::Node{
 
       gains_subscriber        = this->create_subscription<geometry_msgs::msg::Wrench>("/control_1/gains",  10, std::bind(&EController::gains_callback, this, std::placeholders::_1));
       gains_subscriber2       = this->create_subscription<geometry_msgs::msg::Wrench>("/control_1/gains2", 10, std::bind(&EController::gains_callback2, this, std::placeholders::_1));
+      gains_subscriber3       = this->create_subscription<geometry_msgs::msg::Wrench>("/control_1/gains3", 10, std::bind(&EController::gains_callback3, this, std::placeholders::_1));
 
       // Temporal toggle
       feed_togle_subscriber = this->create_subscription<std_msgs::msg::Bool>("/control_1/feed_toggle", 10, std::bind(&EController::feed_toggle_callback, this, std::placeholders::_1));
@@ -35,6 +48,8 @@ class EController : public rclcpp::Node{
       control_f_publisher = this->create_publisher<geometry_msgs::msg::Wrench>("/control_1/control_force", 10);
       motor_publisher     = this->create_publisher<actuator_msgs::msg::Actuators>("/x500_1/command/motor_speed", 10);
       error_publisher     = this->create_publisher<geometry_msgs::msg::PoseStamped>("/control_1/error", 10);
+      sigma_publisher     = this->create_publisher<geometry_msgs::msg::PoseStamped>("/control_1/sigma", 10);
+      K_publisher         = this->create_publisher<geometry_msgs::msg::Vector3>("/control_1/K_values", 10);
       tf_broadcaster      = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
       //control_timer   = this->create_wall_timer(10ms, std::bind(&EController::control_callback, this));
@@ -55,13 +70,30 @@ class EController : public rclcpp::Node{
       kQ = kT*0.25; 
       l  = 0.25;
 
-      kp_lin << 2.25,   2.25,   8.5;
-      kd_lin << 5.2,   5.2,   2.5;
-      ki_lin << 0.0,   0.0,   0.5;
+      kp_lin << 2.25, 2.25, 8.5;
+      kd_lin << 5.2,  5.2,  2.5;
+      ki_lin << 0.0,  0.0,  0.5;
+
+      //kmin   << 0.1,  0.1,  0.1; 
+      //k1     << 0.25, 0.25, 0.25;
+      //k2     << 0.5,  0.5,  0.5; 
+      //lambda << 1.0,  1.0,  1.0;
+      //mu     << 0.1,  0.1,  0.1;
+      //kmin   << 0.5,  0.5,  0.1; 
+      kmin   << 0.45,  0.45,  0.1; 
+      k1     << 0.45,  0.45,  0.25;
+      k2     <<   0.05,    0.05,  0.5; 
+      lambda << 0.25,   0.25,  1.0;
+      mu     <<   0.1,    0.1,  0.1;
+      sigma  << 0.0,  0.0,  0.0;
+      K      << 0.0,  0.0,  0.0;
+      K_dot  << 0.0,  0.0,  0.0;
+      K_dot_prev << 0.0,  0.0,  0.0;
+      
       //ki_lin << 0.0,   0.0,   0.0;
       //kp_ang << 10.15, 10.15, 40.5;
       //kd_ang << 7.0,   7.0,   15.0;
-      kp_ang << 12.15, 12.15, 40.5;
+      kp_ang << 20.0,  20.0, 40.5;
       kd_ang << 20.0,  20.0,   15.0;
 
       e_lin         << 0.0, 0.0, 0.0;
@@ -114,7 +146,20 @@ class EController : public rclcpp::Node{
       }
     }
 
-    void gains_callback(const geometry_msgs::msg::Wrench::SharedPtr msg){
+    void gains_callback3(const geometry_msgs::msg::Wrench::SharedPtr msg){
+      kp_ang(0) = msg->force.x;
+      kp_ang(1) = msg->force.y;
+      kp_ang(2) = msg->force.z;
+
+      kd_ang(0) = msg->torque.x;
+      kd_ang(1) = msg->torque.y;
+      kd_ang(2) = msg->torque.z;
+      std::cout << "Gains3 updated!" << std::endl;
+      std::cout << "kp_ang: " << kp_ang.transpose() << std::endl;
+      std::cout << "kd_ang: " << kd_ang.transpose() << std::endl;
+    }
+
+    /*void gains_callback(const geometry_msgs::msg::Wrench::SharedPtr msg){
       kp_lin(0) = msg->force.x;
       kp_lin(1) = msg->force.y;
 
@@ -128,8 +173,24 @@ class EController : public rclcpp::Node{
       std::cout << "kp_lin: " << kp_lin.transpose() << std::endl;
       std::cout << "kd_lin: " << kd_lin.transpose() << std::endl;
       std::cout << "ki_lin: " << ki_lin.transpose() << std::endl;
+    }*/
+    void gains_callback(const geometry_msgs::msg::Wrench::SharedPtr msg){
+      kmin(0) = msg->force.x;
+      kmin(1) = msg->force.y;
+
+      k1(0) = msg->force.z;
+      k1(1) = msg->torque.x;
+
+      k2(0) = msg->torque.y;
+      k2(1) = msg->torque.z;
+
+      std::cout << "Gains updated!" << std::endl;
+      std::cout << "kmin: " << kmin.transpose() << std::endl;
+      std::cout << "k1: " << k1.transpose() << std::endl;
+      std::cout << "k2: " << k2.transpose() << std::endl;
     }
 
+    /*
     void gains_callback2(const geometry_msgs::msg::Wrench::SharedPtr msg){
       kp_ang(0) = msg->force.x;
       kp_ang(1) = msg->force.y;
@@ -140,6 +201,17 @@ class EController : public rclcpp::Node{
       std::cout << "Gains2 updated!" << std::endl;
       std::cout << "kp_ang: " << kp_ang.transpose() << std::endl;
       std::cout << "kd_ang: " << kd_ang.transpose() << std::endl;
+    }*/
+    void gains_callback2(const geometry_msgs::msg::Wrench::SharedPtr msg){
+      lambda(0) = msg->force.x;
+      lambda(1) = msg->force.y;
+
+      mu(0) = msg->force.z;
+      mu(1) = msg->torque.x;
+
+      std::cout << "Gains2 updated!" << std::endl;
+      std::cout << "lambda: " << lambda.transpose() << std::endl;
+      std::cout << "mu: " << mu.transpose() << std::endl;
     }
 
     void sim_pose_callback(const nav_msgs::msg::Odometry::SharedPtr msg){
@@ -173,7 +245,8 @@ class EController : public rclcpp::Node{
       // tf
       sim_tf.header.stamp = this->get_clock()->now();
       sim_tf.header.frame_id = "world";
-      sim_tf.child_frame_id = "x500";
+      //sim_tf.child_frame_id = "x500";
+      sim_tf.child_frame_id = this->get_parameter("tf_namespace").as_string(); 
       sim_tf.transform.translation.x = sim_pos(0);
       sim_tf.transform.translation.y = sim_pos(1);
       sim_tf.transform.translation.z = sim_pos(2);
@@ -259,15 +332,43 @@ class EController : public rclcpp::Node{
       //std::cout << "e_lin_int: " << e_lin_int.transpose() << std::endl;
 
       // Compute linear control (angular control needs fu)
-      //uaux_lin = kp_lin.cwiseProduct(e_lin) + kd_lin.cwiseProduct(e_dot_lin);
-      uaux_lin = kp_lin.cwiseProduct(e_lin) + kd_lin.cwiseProduct(e_dot_lin) + ki_lin.cwiseProduct(e_lin_int); 
+      //uaux_lin = kp_lin.cwiseProduct(e_lin) + kd_lin.cwiseProduct(e_dot_lin) + ki_lin.cwiseProduct(e_lin_int); 
+
+      // Kmin sliding mode control
+      sigma = e_dot_lin + lambda.cwiseProduct(e_lin);
+      //sigma = e_lin + lambda.cwiseProduct(e_dot_lin);
+
+      // Compute K_dot
+      for (int i = 0; i < 3; i++) {
+	if (K(i) > kmin(i)) {
+	  K_dot(i) = k1(i) * sign( abs(sigma(i)) - mu(i) );
+	} else {
+	  K_dot(i) = kmin(i);
+	}
+      }
+
+      // Integrate K_dot
+      K = K + 0.5*(K_dot + K_dot_prev)*0.05;
+      K_dot_prev = K_dot;
+
+      // Compute control law
+      for (int i = 0; i < 3; i++) {
+	uaux_lin(i) = -K(i) * pow(abs(sigma(i)), 0.5) * sign(sigma(i)) - k2(i) * sigma(i);
+	//uaux_lin(i) = -k1(i) * pow(abs(sigma(i)), 0.5) * sign(sigma(i)) - k2(i) * sigma(i);
+      }
 
       // Rotate control
       //fu = -uaux_lin;
       // Add feedforward to linear control
       //fu = feed_lin - uaux_lin;
-      fu = m*(feed_lin - uaux_lin);
+      //fu = m*(feed_lin - uaux_lin);
+      //fu = -m*(feed_lin - uaux_lin);
+      
+      fu = -m*(feed_lin - uaux_lin + lambda.cwiseProduct(e_dot_lin));
+
       fu(2) = -fu(2);
+      //fu(0) = 0.0;
+      //fu(1) = 0.0;
 
       // Saturate forces as safety
       fu(0) = std::max(-m*2.5,  std::min(m*2.5, fu(0)));
@@ -284,7 +385,7 @@ class EController : public rclcpp::Node{
       } else {
 	qud.w() = sqrt((1 + (fu.normalized()).dot(ft))/2.0);
       }
-      if (fu.normalized().cross(ft).norm() < 0.01) {
+      if (fu.normalized().cross(ft).norm() < 0.0001) {
 	qud.x() = 0.0;
 	qud.y() = 0.0;
 	qud.z() = 0.0;
@@ -301,13 +402,13 @@ class EController : public rclcpp::Node{
       qe.normalize();
 
       // Sanity check qe for mag = 0
-      double norm = sqrt(qe.x()*qe.x() + qe.y()*qe.y() + qe.z()*qe.z());
+      //double norm = sqrt(qe.x()*qe.x() + qe.y()*qe.y() + qe.z()*qe.z());
 
-      if (norm < 0.0001) {
-	e_ang = Eigen::Vector3d(0.0, 0.0, 0.0);
-      } else {
-	e_ang = 2 * Eigen::Vector3d(qe.x(), qe.y(), qe.z()).normalized() * (acos(qe.w()));
-      }
+      //if (norm < 0.0001) {
+      //	e_ang = Eigen::Vector3d(0.0, 0.0, 0.0);
+      //} else {
+      e_ang = 2 * Eigen::Vector3d(qe.x(), qe.y(), qe.z()).normalized() * (acos(qe.w()));
+      //}
 
       // Compute angular error derivative
       e_dot_ang = desired_omega - sim_omega;
@@ -345,6 +446,15 @@ class EController : public rclcpp::Node{
       error_msg.pose.orientation.y = qe.y();
       error_msg.pose.orientation.z = qe.z();
       error_publisher->publish(error_msg);
+      
+      error_msg.pose.position.x = sigma(0); 
+      error_msg.pose.position.y = sigma(1);
+      error_msg.pose.position.z = sigma(2);
+      error_msg.pose.orientation.w = 0.0;
+      error_msg.pose.orientation.x = e_ang(0);
+      error_msg.pose.orientation.y = e_ang(1);
+      error_msg.pose.orientation.z = e_ang(2);
+      sigma_publisher->publish(error_msg);
 
       // Publish control force for visualization
       control_f.force.x  = fu(0);
@@ -355,6 +465,12 @@ class EController : public rclcpp::Node{
       control_f.torque.z = u_ang(2);
       control_f_publisher->publish(control_f);
 
+      // Publish K values
+      geometry_msgs::msg::Vector3 K_msg;
+      K_msg.x = K(0);
+      K_msg.y = K(1);
+      K_msg.z = K(2);
+      K_publisher->publish(K_msg);
     }
 
   private:
@@ -394,6 +510,17 @@ class EController : public rclcpp::Node{
     Eigen::Vector3d    ki_lin;        // Linear i gains
     Eigen::Vector3d    kp_ang;        // Angular p gains
     Eigen::Vector3d    kd_ang;        // Angular d gains
+				      //
+    Eigen::Vector3d    kmin;          // Kmin sliding mode gain
+    Eigen::Vector3d    k1;            // K1 sliding mode gain
+    Eigen::Vector3d    k2;            // K2 sliding mode gain
+    Eigen::Vector3d    lambda;        // Lambda sliding mode parameter
+    Eigen::Vector3d    mu;            // Mu sliding mode parameter
+    Eigen::Vector3d    sigma;         // Sigma sliding mode parameter
+    Eigen::Vector3d    K;             // Adaptive gain
+    Eigen::Vector3d    K_dot;         // Adaptive gain derivative
+    Eigen::Vector3d    K_dot_prev;    // Adaptive gain derivative previous
+
     Eigen::Vector3d    g_vector;      // Gravity vector
     Eigen::Vector3d    feed_lin;      // Feedforward linear forces
     Eigen::Vector3d    feed_ang;      // Feedforward angular torques
@@ -423,12 +550,15 @@ class EController : public rclcpp::Node{
 
     rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr   gains_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr   gains_subscriber2;
+    rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr   gains_subscriber3;
     
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr          feed_togle_subscriber;
 
     rclcpp::Publisher<geometry_msgs::msg::Wrench>::SharedPtr      control_f_publisher;
     rclcpp::Publisher<actuator_msgs::msg::Actuators>::SharedPtr   motor_publisher;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr error_publisher;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr sigma_publisher;
+    rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr     K_publisher;
 
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster;
 
