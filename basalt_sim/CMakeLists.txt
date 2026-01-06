@@ -28,7 +28,7 @@ add_executable(fields_viz_node src/fields_viz.cpp)
 ament_target_dependencies(fields_viz_node rclcpp std_msgs geometry_msgs visualization_msgs)
 
 add_executable(fxt_diff_node src/fxt_diff.cpp)
-ament_target_dependencies(fxt_diff_node rclcpp std_msgs geometry_msgs nav_msgs)
+ament_target_dependencies(fxt_diff_node rclcpp std_msgs geometry_msgs nav_msgs tf2_ros)
 
 ament_python_install_package(${PROJECT_NAME})
 
