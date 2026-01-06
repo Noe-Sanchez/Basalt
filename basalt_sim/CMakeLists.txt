@@ -33,6 +33,7 @@ install(PROGRAMS
   scripts/vcviz.py
   scripts/eval_traj.py
   scripts/eval_traj2.py
+  scripts/show_pinwheel.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

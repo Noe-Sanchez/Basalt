@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped, Point, Twist, TwistStamped, PoseArray, Pose  
+from geometry_msgs.msg import PoseStamped, Point, Twist, TwistStamped, PoseArray, Pose, TransformStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import String, Int32
+from tf2_ros import TransformBroadcaster
 import time
 import math
 
@@ -25,6 +26,9 @@ class TelloReference(Node):
 
     self.timer = self.create_timer(0.01, self.timer_callback)
     self.time = 0
+
+    self.tf_broadcaster = TransformBroadcaster(self)
+    self.leader_tf = TransformStamped()
 
     self.follower_pose_list = []
     self.follower_velocity_list = []
@@ -56,25 +60,37 @@ class TelloReference(Node):
 
     # Iterate over all drones
     for i in range(self.get_parameter('num_drones').value):
-      self.follower_pose_list[i].position.x = math.cos(i*math.pi/2)*(math.sin(self.time/16)/3 + 0.7)
-      self.follower_pose_list[i].position.y = math.sin(i*math.pi/2)*(math.sin(self.time/16)/3 + 0.7)
+      self.follower_pose_list[i].position.x = 2*math.cos(i*math.pi/2)*(math.sin(self.time/16)/3 + 0.7)
+      self.follower_pose_list[i].position.y = 2*math.sin(i*math.pi/2)*(math.sin(self.time/16)/3 + 0.7)
       self.follower_pose_list[i].position.z = 0.0
       self.follower_pose_list[i].orientation.x = 0.0
       self.follower_pose_list[i].orientation.y = 0.0
       self.follower_pose_list[i].orientation.z = 0.0
       self.follower_pose_list[i].orientation.w = 1.0
 
-      self.follower_velocity_list[i].position.x = math.cos(i*math.pi/2)*(math.cos(self.time/16)/48)
-      self.follower_velocity_list[i].position.y = math.sin(i*math.pi/2)*(math.cos(self.time/16)/48)
+      self.follower_velocity_list[i].position.x = 2*math.cos(i*math.pi/2)*(math.cos(self.time/16)/48)
+      self.follower_velocity_list[i].position.y = 2*math.sin(i*math.pi/2)*(math.cos(self.time/16)/48)
       self.follower_velocity_list[i].position.z = 0.0
       self.follower_velocity_list[i].orientation.x = 0.0
       self.follower_velocity_list[i].orientation.y = 0.0
       self.follower_velocity_list[i].orientation.z = 0.0
-      self.follower_velocity_list[i].orientation.w = 0.0 
+      self.follower_velocity_list[i].orientation.w = 1.0 
 
     self.formation_definition.header.stamp = self.get_clock().now().to_msg()
     self.formation_definition.poses = self.follower_pose_list
     self.formation_definition.header.frame_id = 'leader'
+
+    self.leader_tf.header.stamp = self.get_clock().now().to_msg()
+    self.leader_tf.header.frame_id = 'world'
+    self.leader_tf.child_frame_id = 'leader'
+    self.leader_tf.transform.translation.x = self.leader_state.pose.pose.position.x
+    self.leader_tf.transform.translation.y = self.leader_state.pose.pose.position.y
+    self.leader_tf.transform.translation.z = self.leader_state.pose.pose.position.z
+    self.leader_tf.transform.rotation.x = self.leader_state.pose.pose.orientation.x
+    self.leader_tf.transform.rotation.y = self.leader_state.pose.pose.orientation.y
+    self.leader_tf.transform.rotation.z = self.leader_state.pose.pose.orientation.z
+    self.leader_tf.transform.rotation.w = self.leader_state.pose.pose.orientation.w
+    self.tf_broadcaster.sendTransform(self.leader_tf)
 
     self.formation_definition_publisher.publish(self.formation_definition)
 

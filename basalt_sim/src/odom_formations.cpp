@@ -17,7 +17,7 @@ class Formations2 : public rclcpp::Node{
   public:
     Formations2(): Node("formations2_node"){
       // Drone parameters
-      num_drones = this->declare_parameter("num_drones", 3);
+      num_drones = this->declare_parameter("num_drones", 12);
 
       // Resize odoms
       follower_odom_msgs.resize(num_drones);
@@ -89,6 +89,8 @@ class Formations2 : public rclcpp::Node{
     }
 
     void control_callback(){
+      // Get param again to allow dynamic resizing
+      //num_drones = this->get_parameter("num_drones").as_int();
 
       tf_broadcaster->sendTransform(leader_tf);
 
