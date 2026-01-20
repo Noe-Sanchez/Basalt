@@ -16,13 +16,14 @@ find_package(actuator_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(crazyflie_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 add_executable(control_node src/control.cpp)
 ament_target_dependencies(control_node rclcpp std_msgs geometry_msgs nav_msgs actuator_msgs visualization_msgs tf2_ros) 
 
 add_executable(odom_formations_node src/odom_formations.cpp)
-ament_target_dependencies(odom_formations_node rclcpp std_msgs geometry_msgs nav_msgs tf2_ros tf2_geometry_msgs)
+ament_target_dependencies(odom_formations_node rclcpp std_msgs geometry_msgs nav_msgs tf2_ros tf2_geometry_msgs crazyflie_interfaces)
 
 add_executable(fields_viz_node src/fields_viz.cpp)
 ament_target_dependencies(fields_viz_node rclcpp std_msgs geometry_msgs visualization_msgs)

@@ -6,6 +6,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/pose_array.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
+#include "crazyflie_interfaces/msg/position.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Geometry>
@@ -23,6 +24,9 @@ class Formations2 : public rclcpp::Node{
       follower_odom_msgs.resize(num_drones);
       follower_odoms.resize(num_drones);
       follower_tfs.resize(num_drones);
+
+      // CF
+      cfs_positions.resize(num_drones);
 
       // Initialize on takeoff formation
       for(int i = 0; i < num_drones; i++){
@@ -53,6 +57,10 @@ class Formations2 : public rclcpp::Node{
         follower_odom_publishers.push_back(this->create_publisher<nav_msgs::msg::Odometry>(topic_name, 10));
         follower_odom_msgs.push_back(nav_msgs::msg::Odometry());
         follower_tfs.push_back(geometry_msgs::msg::TransformStamped());
+	std::string cf_name = "/cf" + std::to_string(i+1) + "/cmd_position";
+
+	cfs_positions.push_back(crazyflie_interfaces::msg::Position());
+	cfs_positions_publishers.push_back(this->create_publisher<crazyflie_interfaces::msg::Position>(cf_name, 10));
 
       }
 
@@ -105,6 +113,15 @@ class Formations2 : public rclcpp::Node{
 	// Orientation (simple addition, may need quaternion multiplication for real applications)
 	follower_odom_msgs[i].pose.pose.orientation = leader_tf.transform.rotation;
 
+	cfs_positions[i].x = follower_odom_msgs[i].pose.pose.position.x;
+	cfs_positions[i].y = follower_odom_msgs[i].pose.pose.position.y;
+	cfs_positions[i].z = follower_odom_msgs[i].pose.pose.position.z;
+	cfs_positions[i].yaw = 0.0;
+	cfs_positions[i].header.stamp = this->now();
+
+	cfs_positions_publishers[i]->publish(cfs_positions[i]);
+
+
 	// Velocity (leader for now)
 	follower_odom_msgs[i].twist.twist = leader_odom.twist.twist;
 
@@ -124,6 +141,8 @@ class Formations2 : public rclcpp::Node{
     geometry_msgs::msg::TransformStamped leader_tf;
     std::vector<geometry_msgs::msg::TransformStamped> follower_tfs;
     std::vector<nav_msgs::msg::Odometry> follower_odom_msgs;
+    std::vector<crazyflie_interfaces::msg::Position> follower_positions;
+    std::vector<crazyflie_interfaces::msg::Position> cfs_positions;
 
 
     std::vector<nav_msgs::msg::Odometry> follower_odoms;
@@ -132,6 +151,7 @@ class Formations2 : public rclcpp::Node{
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr     formation_dot_subscriber;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr           desired_leader_pose_subscriber;
     std::vector<rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr> follower_odom_publishers;
+    std::vector<rclcpp::Publisher<crazyflie_interfaces::msg::Position>::SharedPtr> cfs_positions_publishers;
     rclcpp::TimerBase::SharedPtr control_timer;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster;
 

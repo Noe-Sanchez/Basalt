@@ -21,6 +21,7 @@ class TelloReference(Node):
 
     self.formation_definition_publisher     = self.create_publisher(PoseArray, '/formation/definition', 10)
     self.formation_dot_definition_publisher = self.create_publisher(PoseArray, '/formation/velocity', 10)
+
     self.formation_definition               = PoseArray()
     self.formation_dot_definition           = PoseArray()
 
@@ -60,8 +61,10 @@ class TelloReference(Node):
 
     # Iterate over all drones
     for i in range(self.get_parameter('num_drones').value):
-      self.follower_pose_list[i].position.x = 2*math.cos(i*math.pi/2)*(math.sin(self.time/16)/3 + 0.7)
-      self.follower_pose_list[i].position.y = 2*math.sin(i*math.pi/2)*(math.sin(self.time/16)/3 + 0.7)
+      #self.follower_pose_list[i].position.x = 2*math.cos(i*math.pi/2)*(math.sin(self.time/16)/3 + 0.7)
+      #self.follower_pose_list[i].position.y = 2*math.sin(i*math.pi/2)*(math.sin(self.time/16)/3 + 0.7)
+      self.follower_pose_list[i].position.x = math.cos(i*math.pi/2)*(math.sin(self.time/16)/3 + 0.7)
+      self.follower_pose_list[i].position.y = math.sin(i*math.pi/2)*(math.sin(self.time/16)/3 + 0.7)
       self.follower_pose_list[i].position.z = 0.0
       self.follower_pose_list[i].orientation.x = 0.0
       self.follower_pose_list[i].orientation.y = 0.0
