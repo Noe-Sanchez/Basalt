@@ -31,6 +31,9 @@ ament_target_dependencies(fields_viz_node rclcpp std_msgs geometry_msgs visualiz
 add_executable(fxt_diff_node src/fxt_diff.cpp)
 ament_target_dependencies(fxt_diff_node rclcpp std_msgs geometry_msgs nav_msgs tf2_ros)
 
+add_executable(pttd_node src/pttd.cpp)
+ament_target_dependencies(pttd_node rclcpp std_msgs geometry_msgs nav_msgs tf2_ros)
+
 ament_python_install_package(${PROJECT_NAME})
 
 install(PROGRAMS
@@ -46,6 +49,7 @@ install(TARGETS
   odom_formations_node
   fields_viz_node
   fxt_diff_node
+  pttd_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
