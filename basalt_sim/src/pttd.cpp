@@ -9,6 +9,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/accel_stamped.hpp"
+#include "geometry_msgs/msg/twist_stamped.hpp"
 #include <tf2_ros/transform_broadcaster.h>
 #include "std_msgs/msg/bool.hpp"
 #include "geometry_msgs/msg/wrench.hpp"
@@ -71,17 +72,6 @@ class PTTD {
       L = L + (L_dot + L_dot_previous)*0.5*dt;
       L_dot_previous = L_dot;
 
-      // Sanity print for first term of L_dot
-      std::cout << "First term L_dot: " << (k1 * (1.0/(T_c*(p-1.0))) * sqrt(fabs(e_diff)) * sqrt(L)) << std::endl;
-      // Sanity print for second term of L_dot
-      std::cout << "Second term L_dot: " << (k2 * (L * L)) << std::endl;
-      // Check for potential problemmakers
-      std::cout << "Sqrt of fabs(e_diff): " << sqrt(fabs(e_diff)) << std::endl;
-      std::cout << "Sqrt of L: " << sqrt(L) << std::endl;
-      std::cout << "Denominator T_c*(p-1.0): " << T_c*(p-1.0) << std::endl;
-      std::cout << "L: " << L << std::endl;
-      std::cout << "L_dot: " << L_dot << std::endl;
-      
       // Second state
       z_2_dot = ( (2.0 * L * sign(e_diff)) / ( (T_c*T_c) * pow(p-1.0, 2.0) ) ) + ( sig(e_diff, (2.0*p)-1.0) / (2.0 * (T_c*T_c) * pow(p, 2.0)) );
       // Trapezoidal integration
@@ -95,8 +85,6 @@ class PTTD {
       z_1_dot_previous = z_1_dot;
 
       // Variables are now exposed, extract z_1 and z_2 as estimates
-      // Sanity print for L
-      std::cout << "e_diff: " << e_diff << std::endl;
     }
 
 
@@ -153,6 +141,8 @@ class PTTD_Node : public rclcpp::Node{
 
       // Publishers
       diff_pose_publisher = this->create_publisher<nav_msgs::msg::Odometry>("/control_1/diff/odom", 10);
+      diff_error_publisher = this->create_publisher<nav_msgs::msg::Odometry>("/control_1/diff/error", 10);
+      l_publisher = this->create_publisher<geometry_msgs::msg::TwistStamped>("/control_1/diff/L", 10);
 
       // Tf
       tf_broadcaster      = std::make_shared<tf2_ros::TransformBroadcaster>(this);
@@ -172,13 +162,20 @@ class PTTD_Node : public rclcpp::Node{
       // Init algorithmic variables
       e_diff                = Eigen::Vector3d(0.0, 0.0, 0.0);
       z_1                   = Eigen::Vector3d(0.0, 0.0, 0.0);
+      //z_1                   = Eigen::Vector3d(2.0, 2.0, 2.0);
       z_2                   = Eigen::Vector3d(0.0, 0.0, 0.0);
 			
       // Init gains
-      T_c                   = Eigen::Vector3d(2.0, 2.0, 2.0); // Convergence time
+      //T_c                   = Eigen::Vector3d(2.0, 2.0, 2.0); // Convergence time
+      T_c                   = Eigen::Vector3d(1.0, 1.0, 1.0); // Convergence time
+      //p                     = Eigen::Vector3d(1.5, 1.5, 1.5); // Convergence parameter
+      //p                     = Eigen::Vector3d(1.75, 1.75, 1.75); // Convergence parameter
       p                     = Eigen::Vector3d(1.5, 1.5, 1.5); // Convergence parameter
-      k1                    = Eigen::Vector3d(1.0, 1.0, 1.0); // Adaptive parameter 1
-      k2                    = Eigen::Vector3d(0.5, 0.5, 0.5); // Adaptive parameter 2
+      //p                     = Eigen::Vector3d(2.75, 2.75, 2.75); // Convergence parameter
+      //k1                    = Eigen::Vector3d(1.0, 1.0, 1.0); // Adaptive parameter 1
+      //k1                    = Eigen::Vector3d(1.25, 1.25, 1.25); // Adaptive parameter 1
+      k1                    = Eigen::Vector3d(1.5, 1.5, 1.5); // Adaptive parameter 1
+      k2                    = Eigen::Vector3d(0.35, 0.35, 0.35); // Adaptive parameter 2
       
       // Init algorithmic class
       for (int i=0; i<3; i++){
@@ -237,12 +234,15 @@ class PTTD_Node : public rclcpp::Node{
       // Compute error
       e_diff = sim_pose - z_1;
 
+      Eigen::Vector3d L_vec;
+
       // Run PTTD for each DOF
       for (int i=0; i<3; i++){
 	PTTDs[i].setOdom(sim_pose(i));
 	PTTDs[i].compute();
 	z_1(i) = PTTDs[i].get_z1();
 	z_2(i) = PTTDs[i].get_z2();
+        L_vec(i) = PTTDs[i].get_L();
       }
 
       // Publish diff pose
@@ -256,6 +256,25 @@ class PTTD_Node : public rclcpp::Node{
       diff_pose_msg.twist.twist.linear.y  = z_2(1);
       diff_pose_msg.twist.twist.linear.z  = z_2(2);
       diff_pose_publisher->publish(diff_pose_msg);
+
+      geometry_msgs::msg::TwistStamped L_msg;
+      L_msg.header.stamp = this->get_clock()->now();
+      L_msg.header.frame_id = this->get_parameter("tf_namespace").as_string();
+      L_msg.twist.linear.x = L_vec(0);
+      L_msg.twist.linear.y = L_vec(1);
+      L_msg.twist.linear.z = L_vec(2);
+      l_publisher->publish(L_msg);
+
+      nav_msgs::msg::Odometry error_msg;
+      error_msg.header.stamp = this->get_clock()->now();
+      error_msg.header.frame_id = this->get_parameter("tf_namespace").as_string();
+      error_msg.pose.pose.position.x = sim_pose(0) - z_1(0);
+      error_msg.pose.pose.position.y = sim_pose(1) - z_1(1);
+      error_msg.pose.pose.position.z = sim_pose(2) - z_1(2);
+      error_msg.twist.twist.linear.x = sim_vel(0)  - z_2(0);
+      error_msg.twist.twist.linear.y = sim_vel(1)  - z_2(1);
+      error_msg.twist.twist.linear.z = sim_vel(2)  - z_2(2);
+      diff_error_publisher->publish(error_msg);
 
     }
 
@@ -288,13 +307,16 @@ class PTTD_Node : public rclcpp::Node{
     Eigen::Vector3d    k2;               // Adaptive parameter 2
 
 
-    double dt = 0.05; // Control loop time step
+    //double dt = 0.05; // Control loop time step
+    double dt = 0.01; // Control loop time step
 
     rclcpp::TimerBase::SharedPtr control_timer;
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sim_pose_subscriber;
 
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr    diff_pose_publisher;
+    rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr    l_publisher;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr    diff_error_publisher;
 
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster;
 
