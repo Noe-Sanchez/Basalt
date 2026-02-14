@@ -1,0 +1,8 @@
+ros2 launch basalt_sim multi_drone_launch.py num_drones:=12
+./fix_ns.sh 12
+./spawn_drones.sh 12 4
+ros2 topic pub --once /formation/definition geometry_msgs/msg/PoseArray "poses: [{position: {x: 0, y: 0}}, {position: {x: 2, y: 0}}, {position: {x: 4, y: 0}}, {position: {x: 6, y: 0}}, {position: {x: 0, y: 2}}, {position: {x: 2, y: 2}}, {position: {x: 4, y: 2}}, {position: {x: 6, y: 2}}, {position: {x: 0, y: 4}}, {position: {x: 2, y: 4}}, {position: {x: 4, y: 4}}, {position: {x: 6, y: 4}}]"
+gz sim -s -r --headless-rendering basalt_sim/worlds/hardcoded_x500.sdf
+ros2 launch mavros px4.launch fcu_url:="udp://:14541@localhost:14581" tgt_system:="2" tgt_component:="1" namespace:="uav1"
+PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 ./build/px4_sitl_default/bin/px4 -i 1
+PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_GZ_MODEL_POSE="0,1" PX4_SIM_MODEL=gz_x500 ./build/px4_sitl_default/bin/px4 -i 2
