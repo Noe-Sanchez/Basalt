@@ -34,6 +34,7 @@ class EController : public rclcpp::Node{
 
       // Subscribers
       sim_pose_subscriber     = this->create_subscription<nav_msgs::msg::Odometry>("/model/x500_1/odometry",    10, std::bind(&EController::sim_pose_callback,     this, std::placeholders::_1));
+      //sim_pose_subscriber     = this->create_subscription<nav_msgs::msg::Odometry>("/control_1/diff/odom",    10, std::bind(&EController::sim_pose_callback2,     this, std::placeholders::_1));
       desired_pose_subscriber = this->create_subscription<nav_msgs::msg::Odometry>("/control_1/reference/pose", 10, std::bind(&EController::desired_pose_callback, this, std::placeholders::_1));
       feedforward_subscriber  = this->create_subscription<geometry_msgs::msg::Wrench>("/control_1/feedforward", 10, std::bind(&EController::feedforward_callback,  this, std::placeholders::_1));
 
@@ -237,6 +238,67 @@ class EController : public rclcpp::Node{
       sim_vel << vel_world.x(),
 		 vel_world.y(),
 		 vel_world.z();
+
+      sim_omega << sim_pose.twist.twist.angular.x, 
+		   sim_pose.twist.twist.angular.y,
+		   sim_pose.twist.twist.angular.z;
+      
+      // tf
+      sim_tf.header.stamp = this->get_clock()->now();
+      sim_tf.header.frame_id = "world";
+      //sim_tf.child_frame_id = "x500";
+      sim_tf.child_frame_id = this->get_parameter("tf_namespace").as_string(); 
+      sim_tf.transform.translation.x = sim_pos(0);
+      sim_tf.transform.translation.y = sim_pos(1);
+      sim_tf.transform.translation.z = sim_pos(2);
+      sim_tf.transform.rotation.w = sim_quat.w();
+      sim_tf.transform.rotation.x = sim_quat.x();
+      sim_tf.transform.rotation.y = sim_quat.y();
+      sim_tf.transform.rotation.z = sim_quat.z();
+      tf_broadcaster->sendTransform(sim_tf);
+
+      /*
+      // Publish reference tf as well
+      sim_tf.header.stamp = this->get_clock()->now();
+      sim_tf.header.frame_id = "world";
+      sim_tf.child_frame_id = "x500_ref";
+      sim_tf.transform.translation.x = desired_pos(0);
+      sim_tf.transform.translation.y = desired_pos(1);
+      sim_tf.transform.translation.z = desired_pos(2);
+      sim_tf.transform.rotation.w = desired_quat.w();
+      sim_tf.transform.rotation.x = desired_quat.x();
+      sim_tf.transform.rotation.y = desired_quat.y();
+      sim_tf.transform.rotation.z = desired_quat.z();
+      tf_broadcaster->sendTransform(sim_tf);*/
+    }
+
+    void sim_pose_callback2(const nav_msgs::msg::Odometry::SharedPtr msg){
+      sim_pose = *msg;
+
+      sim_pos <<  sim_pose.pose.pose.position.x,
+                  sim_pose.pose.pose.position.y,
+                  sim_pose.pose.pose.position.z;
+
+      sim_quat.w() =  sim_pose.pose.pose.orientation.w;
+      sim_quat.x() =  sim_pose.pose.pose.orientation.x;
+      sim_quat.y() =  sim_pose.pose.pose.orientation.y;
+      sim_quat.z() =  sim_pose.pose.pose.orientation.z;
+
+      // Rotate velocity to world frame, because it comes from odom plugin
+      //      vel_body.w() = 0.0;
+      //      vel_body.x() = sim_pose.twist.twist.linear.x;
+      //      vel_body.y() = sim_pose.twist.twist.linear.y;
+      //      vel_body.z() = sim_pose.twist.twist.linear.z;
+      //
+      //      vel_world = sim_quat * vel_body * sim_quat.conjugate();
+      //
+      //      sim_vel << vel_world.x(),
+      //		 vel_world.y(),
+      //		 vel_world.z();
+
+      sim_vel << sim_pose.twist.twist.linear.x,
+		 sim_pose.twist.twist.linear.y,
+		 sim_pose.twist.twist.linear.z;
 
       sim_omega << sim_pose.twist.twist.angular.x, 
 		   sim_pose.twist.twist.angular.y,
