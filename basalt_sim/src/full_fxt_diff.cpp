@@ -191,13 +191,16 @@ class FXTTD_Node : public rclcpp::Node{
       q_e        = Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0);
 			
       // Init gains
-      epsilon1   << 60.0, 60.0, 60.0, 0.06, 0.06, 0.06; // First estimation gain
-      epsilon2   << 60.0, 60.0, 60.0, 0.06, 0.06, 0.06; // Second estimation gain
-      epsilon3   << 60.0, 60.0, 60.0, 0.06, 0.06, 0.06; // Third estimation gain
+      epsilon1   << 60.0, 60.0, 80.0, 60.0, 60.0, 60.0; // First estimation gain
+      epsilon2   << 60.0, 60.0, 80.0, 180.0, 180.0, 180.0; // Second estimation gain
+      epsilon3   << 60.0, 60.0, 80.0, 120.0, 120.0, 120.0; // Third estimation gain
       //epsilon3   << 40.0, 40.0, 40.0, 40.0, 40.0, 40.0; // Third estimation gain
-      alpha      << 0.75, 0.75, 0.75, 0.75, 0.75, 0.75; // Slow dynamics exponent gain
+      //alpha      << 0.75, 0.75, 0.75, 0.95, 0.95, 0.95; // Slow dynamics exponent gain
+      alpha      << 0.75, 0.75, 0.75, 0.70, 0.70, 0.60; // Slow dynamics exponent gain
       //beta       << 1.60, 1.60, 1.60, 1.60, 1.60, 1.60; // Fast dynamics exponent gain
-      beta       << 1.75, 1.75, 1.75, 1.75, 1.75, 1.75; // Fast dynamics exponent gain
+
+      //beta       << 1.75, 1.75, 1.75, 1.75, 1.75, 1.75; // Fast dynamics exponent gain
+      beta       << 1.75, 1.75, 1.75, 1.50, 1.50, 1.50; // Fast dynamics exponent gain
       
       // Init algorithmic class
       for (int i=0; i<6; i++){
@@ -227,11 +230,16 @@ class FXTTD_Node : public rclcpp::Node{
       vel_body.y() = sim_pose_msg.twist.twist.linear.y;
       vel_body.z() = sim_pose_msg.twist.twist.linear.z;
 
-      vel_world = sim_quat * vel_body * sim_quat.conjugate();
+      //vel_world = sim_quat * vel_body * sim_quat.conjugate();
 
-      sim_vel << vel_world.x(),
-		 vel_world.y(),
-		 vel_world.z();
+      //sim_vel << vel_world.x(),
+      //		 vel_world.y(),
+      //		 vel_world.z();
+      
+      sim_vel << sim_pose_msg.twist.twist.linear.x, 
+	         sim_pose_msg.twist.twist.linear.y,
+		 sim_pose_msg.twist.twist.linear.z;
+       
 
       sim_omega << sim_pose_msg.twist.twist.angular.x, 
 		   sim_pose_msg.twist.twist.angular.y,
@@ -250,18 +258,10 @@ class FXTTD_Node : public rclcpp::Node{
       q_e = q_hat.conjugate() * sim_quat; 
       q_e.normalize();
 
-      // BAD SHIT
-      if (q_e.w() < 0.0){
-      	q_e.w() = -q_e.w();
-	q_e.x() = -q_e.x();
-	q_e.y() = -q_e.y();
-	q_e.z() = -q_e.z();
-      }
-      
       //QLM
       q_e_vec = q_e.vec();
 
-      if (q_e_vec.norm() < 0.0001){
+      if (q_e_vec.norm() < 0.000001){
         q_e_vec << 0.0, 0.0, 0.0;
       } else { 
         q_e_vec = 2.0*(q_e_vec.normalized() * acos(q_e.w()));
@@ -270,13 +270,6 @@ class FXTTD_Node : public rclcpp::Node{
       e_diff(3) = q_e_vec(0);
       e_diff(4) = q_e_vec(1);
       e_diff(5) = q_e_vec(2);
-
-      std::cout << "Error: ";
-      printf("%+.4f ",  e_diff(3));
-      printf("%+.4f ",  e_diff(4));
-      printf("%+.4f\n", e_diff(5));
-
-      // END BAD SHIT
 
       // Run FXTTD for each DOF
       for (int i = 0; i < 6; i++){
@@ -288,11 +281,10 @@ class FXTTD_Node : public rclcpp::Node{
 	z_3(i) = FXTTDs[i].get_z3();
       }
 
-      // BEGIN BAD SHIT AGAIN
       // Reconvert eta_hat to quaternion
       q_e_vec << z_1(3), z_1(4), z_1(5);
 
-      if (q_e_vec.norm() < 0.0001){
+      if (q_e_vec.norm() < 0.000001){
 	q_hat = Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0);
       } else {
         q_hat.w() = cos(q_e_vec.norm()/2.0);
@@ -301,13 +293,9 @@ class FXTTD_Node : public rclcpp::Node{
 	q_hat.y() = q_e_vec(1);
 	q_hat.z() = q_e_vec(2);
       }
-      // END BAD SHIT AGAIN
 
       // Normalize q_hat
       q_hat.normalize();
-
-
-      // q_hat is now populated
 
       // Publish diff pose
       diff_pose_msg.header.stamp            = this->get_clock()->now();

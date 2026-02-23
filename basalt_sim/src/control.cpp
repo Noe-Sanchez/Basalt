@@ -34,13 +34,15 @@ class EController : public rclcpp::Node{
 
       // Subscribers
       sim_pose_subscriber     = this->create_subscription<nav_msgs::msg::Odometry>("/model/x500_1/odometry",    10, std::bind(&EController::sim_pose_callback,     this, std::placeholders::_1));
-      //sim_pose_subscriber     = this->create_subscription<nav_msgs::msg::Odometry>("/control_1/diff/odom",    10, std::bind(&EController::sim_pose_callback2,     this, std::placeholders::_1));
       desired_pose_subscriber = this->create_subscription<nav_msgs::msg::Odometry>("/control_1/reference/pose", 10, std::bind(&EController::desired_pose_callback, this, std::placeholders::_1));
       feedforward_subscriber  = this->create_subscription<geometry_msgs::msg::Wrench>("/control_1/feedforward", 10, std::bind(&EController::feedforward_callback,  this, std::placeholders::_1));
 
       gains_subscriber        = this->create_subscription<geometry_msgs::msg::Wrench>("/control_1/gains",  10, std::bind(&EController::gains_callback, this, std::placeholders::_1));
       gains_subscriber2       = this->create_subscription<geometry_msgs::msg::Wrench>("/control_1/gains2", 10, std::bind(&EController::gains_callback2, this, std::placeholders::_1));
       gains_subscriber3       = this->create_subscription<geometry_msgs::msg::Wrench>("/control_1/gains3", 10, std::bind(&EController::gains_callback3, this, std::placeholders::_1));
+
+      // Temporal bool for diff
+      kill_switch_subscriber = this->create_subscription<std_msgs::msg::Bool>("/control_1/kill_switch", 10, std::bind(&EController::kill_switch_callback, this, std::placeholders::_1));
 
       // Temporal toggle
       feed_togle_subscriber = this->create_subscription<std_msgs::msg::Bool>("/control_1/feed_toggle", 10, std::bind(&EController::feed_toggle_callback, this, std::placeholders::_1));
@@ -68,7 +70,7 @@ class EController : public rclcpp::Node{
             0, 0, Jzz;
 
       kT = 8.54858e-6;
-      kQ = kT*0.25; 
+      kQ = kT*0.016; // Use of motor constant 
       l  = 0.25;
 
       kp_lin << 2.25, 2.25, 8.5;
@@ -144,6 +146,15 @@ class EController : public rclcpp::Node{
         std::cout << "Feedforward ON" << std::endl;
       } else {
         std::cout << "Feedforward OFF" << std::endl;
+      }
+    }
+
+    void kill_switch_callback(const std_msgs::msg::Bool::SharedPtr msg){
+      kill_switch = msg->data;
+      if (kill_switch) {
+        std::cout << "Kill switch ON" << std::endl;
+      } else {
+        std::cout << "Kill switch OFF" << std::endl;
       }
     }
 
@@ -272,66 +283,6 @@ class EController : public rclcpp::Node{
       tf_broadcaster->sendTransform(sim_tf);*/
     }
 
-    void sim_pose_callback2(const nav_msgs::msg::Odometry::SharedPtr msg){
-      sim_pose = *msg;
-
-      sim_pos <<  sim_pose.pose.pose.position.x,
-                  sim_pose.pose.pose.position.y,
-                  sim_pose.pose.pose.position.z;
-
-      sim_quat.w() =  sim_pose.pose.pose.orientation.w;
-      sim_quat.x() =  sim_pose.pose.pose.orientation.x;
-      sim_quat.y() =  sim_pose.pose.pose.orientation.y;
-      sim_quat.z() =  sim_pose.pose.pose.orientation.z;
-
-      // Rotate velocity to world frame, because it comes from odom plugin
-      //      vel_body.w() = 0.0;
-      //      vel_body.x() = sim_pose.twist.twist.linear.x;
-      //      vel_body.y() = sim_pose.twist.twist.linear.y;
-      //      vel_body.z() = sim_pose.twist.twist.linear.z;
-      //
-      //      vel_world = sim_quat * vel_body * sim_quat.conjugate();
-      //
-      //      sim_vel << vel_world.x(),
-      //		 vel_world.y(),
-      //		 vel_world.z();
-
-      sim_vel << sim_pose.twist.twist.linear.x,
-		 sim_pose.twist.twist.linear.y,
-		 sim_pose.twist.twist.linear.z;
-
-      sim_omega << sim_pose.twist.twist.angular.x, 
-		   sim_pose.twist.twist.angular.y,
-		   sim_pose.twist.twist.angular.z;
-      
-      // tf
-      sim_tf.header.stamp = this->get_clock()->now();
-      sim_tf.header.frame_id = "world";
-      //sim_tf.child_frame_id = "x500";
-      sim_tf.child_frame_id = this->get_parameter("tf_namespace").as_string(); 
-      sim_tf.transform.translation.x = sim_pos(0);
-      sim_tf.transform.translation.y = sim_pos(1);
-      sim_tf.transform.translation.z = sim_pos(2);
-      sim_tf.transform.rotation.w = sim_quat.w();
-      sim_tf.transform.rotation.x = sim_quat.x();
-      sim_tf.transform.rotation.y = sim_quat.y();
-      sim_tf.transform.rotation.z = sim_quat.z();
-      tf_broadcaster->sendTransform(sim_tf);
-
-      /*
-      // Publish reference tf as well
-      sim_tf.header.stamp = this->get_clock()->now();
-      sim_tf.header.frame_id = "world";
-      sim_tf.child_frame_id = "x500_ref";
-      sim_tf.transform.translation.x = desired_pos(0);
-      sim_tf.transform.translation.y = desired_pos(1);
-      sim_tf.transform.translation.z = desired_pos(2);
-      sim_tf.transform.rotation.w = desired_quat.w();
-      sim_tf.transform.rotation.x = desired_quat.x();
-      sim_tf.transform.rotation.y = desired_quat.y();
-      sim_tf.transform.rotation.z = desired_quat.z();
-      tf_broadcaster->sendTransform(sim_tf);*/
-    }
 
     void desired_pose_callback(const nav_msgs::msg::Odometry::SharedPtr msg){
       desired_pose = *msg;
@@ -491,10 +442,17 @@ class EController : public rclcpp::Node{
       // Publish motor speeds
       motor_speed.header.stamp = this->get_clock()->now();
       motor_speed.header.frame_id = "sim/motor_speed";
-      motor_speed.velocity[0] = std::max(0.0, std::min(2000.0, motor_speeds(0)));
-      motor_speed.velocity[1] = std::max(0.0, std::min(2000.0, motor_speeds(1)));
-      motor_speed.velocity[2] = std::max(0.0, std::min(2000.0, motor_speeds(2)));
-      motor_speed.velocity[3] = std::max(0.0, std::min(2000.0, motor_speeds(3)));
+      if (kill_switch) {
+        motor_speed.velocity[0] = 0.0;
+	motor_speed.velocity[1] = 0.0;
+	motor_speed.velocity[2] = 0.0;
+	motor_speed.velocity[3] = 0.0;
+      } else {
+        motor_speed.velocity[0] = std::max(0.0, std::min(2000.0, motor_speeds(0)));
+        motor_speed.velocity[1] = std::max(0.0, std::min(2000.0, motor_speeds(1)));
+        motor_speed.velocity[2] = std::max(0.0, std::min(2000.0, motor_speeds(2)));
+        motor_speed.velocity[3] = std::max(0.0, std::min(2000.0, motor_speeds(3)));
+      }
       motor_publisher->publish(motor_speed);
 
       // Publish error
@@ -546,8 +504,8 @@ class EController : public rclcpp::Node{
     geometry_msgs::msg::PoseStamped error_msg;
 
     // Temporal bool for feedforward toggle
-    //bool feed_toggle = false; 
-    bool feed_toggle = true; 
+    bool feed_toggle = false; 
+    //bool feed_toggle = true; 
 
     Eigen::Matrix3d    J;             // Inertia tensor, kg m^2
     Eigen::Vector3d    e_lin;         // Linear error
@@ -604,6 +562,9 @@ class EController : public rclcpp::Node{
     float kQ;          // Torque coefficient
     float l;           // Rotor arm length, m
 
+    //bool kill_switch = true; // Temporal kill switch for safety
+    bool kill_switch = false; // Temporal kill switch for safety
+
     rclcpp::TimerBase::SharedPtr control_timer;
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr      sim_pose_subscriber;
@@ -613,6 +574,8 @@ class EController : public rclcpp::Node{
     rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr   gains_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr   gains_subscriber2;
     rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr   gains_subscriber3;
+
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr          kill_switch_subscriber;
     
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr          feed_togle_subscriber;
 
