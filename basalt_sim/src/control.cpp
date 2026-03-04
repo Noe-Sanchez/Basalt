@@ -32,7 +32,7 @@ class EController : public rclcpp::Node{
       // Namespace for tf
       this->declare_parameter<std::string>("tf_namespace", "x500_1");
 
-      // Subscribers
+      // Subscribers;
       sim_pose_subscriber     = this->create_subscription<nav_msgs::msg::Odometry>("/model/x500_1/odometry",    10, std::bind(&EController::sim_pose_callback,     this, std::placeholders::_1));
       desired_pose_subscriber = this->create_subscription<nav_msgs::msg::Odometry>("/control_1/reference/pose", 10, std::bind(&EController::desired_pose_callback, this, std::placeholders::_1));
       feedforward_subscriber  = this->create_subscription<geometry_msgs::msg::Wrench>("/control_1/feedforward", 10, std::bind(&EController::feedforward_callback,  this, std::placeholders::_1));
@@ -77,27 +77,18 @@ class EController : public rclcpp::Node{
       kd_lin << 5.2,  5.2,  2.5;
       ki_lin << 0.0,  0.0,  0.5;
 
-      //kmin   << 0.1,  0.1,  0.1; 
-      //k1     << 0.25, 0.25, 0.25;
-      //k2     << 0.5,  0.5,  0.5; 
-      //lambda << 1.0,  1.0,  1.0;
-      //mu     << 0.1,  0.1,  0.1;
-      //kmin   << 0.5,  0.5,  0.1; 
-      kmin   << 0.45,  0.45,  0.1; 
-      k1     << 0.45,  0.45,  0.25;
-      k2     <<   0.05,    0.05,  0.5; 
-      lambda << 0.25,   0.25,  1.0;
-      mu     <<   0.1,    0.1,  0.1;
-      sigma  << 0.0,  0.0,  0.0;
-      K      << 0.0,  0.0,  0.0;
-      K_dot  << 0.0,  0.0,  0.0;
+      kmin   <<     2.0,  2.0,  0.1; 
+      k1     <<     10.0, 10.0, 0.25;
+      k2     <<     0.05, 0.05, 0.5; 
+      lambda <<     0.5,  0.5,  1.0;
+      mu     <<     0.75, 0.75, 0.1;
+      sigma  <<     0.0,  0.0,  0.0;
+      K      <<     0.0,  0.0,  0.0;
+      K_dot  <<     0.0,  0.0,  0.0;
       K_dot_prev << 0.0,  0.0,  0.0;
       
-      //ki_lin << 0.0,   0.0,   0.0;
-      //kp_ang << 10.15, 10.15, 40.5;
-      //kd_ang << 7.0,   7.0,   15.0;
-      kp_ang << 20.0,  20.0, 40.5;
-      kd_ang << 20.0,  20.0,   15.0;
+      kp_ang << 20.0,  20.0, 40.0;
+      kd_ang << 20.0,  20.0, 20.0;
 
       e_lin         << 0.0, 0.0, 0.0;
       e_lin_prev    << 0.0, 0.0, 0.0;
@@ -132,10 +123,12 @@ class EController : public rclcpp::Node{
       // Actuation matrix
       double dd = l/sqrt(2);
 
-      actuation <<  kT, kT, kT, kT,
-      		    -dd*kT, dd*kT,  dd*kT, -dd*kT,
-      		     -dd*kT, dd*kT, -dd*kT, dd*kT,
-      		     -kQ,    -kQ,   kQ,   kQ;
+      actuation <<     kT,    kT,     kT,     kT,
+      		   -dd*kT, dd*kT,  dd*kT, -dd*kT,
+      		   -dd*kT, dd*kT, -dd*kT,  dd*kT,
+      		      -kQ,   -kQ,     kQ,     kQ;
+
+      actuation = actuation.completeOrthogonalDecomposition().pseudoInverse(); // Invert exactly, since matrix is square and full rank
 
       motor_speed.velocity.resize(4);
     }
@@ -268,19 +261,6 @@ class EController : public rclcpp::Node{
       sim_tf.transform.rotation.z = sim_quat.z();
       tf_broadcaster->sendTransform(sim_tf);
 
-      /*
-      // Publish reference tf as well
-      sim_tf.header.stamp = this->get_clock()->now();
-      sim_tf.header.frame_id = "world";
-      sim_tf.child_frame_id = "x500_ref";
-      sim_tf.transform.translation.x = desired_pos(0);
-      sim_tf.transform.translation.y = desired_pos(1);
-      sim_tf.transform.translation.z = desired_pos(2);
-      sim_tf.transform.rotation.w = desired_quat.w();
-      sim_tf.transform.rotation.x = desired_quat.x();
-      sim_tf.transform.rotation.y = desired_quat.y();
-      sim_tf.transform.rotation.z = desired_quat.z();
-      tf_broadcaster->sendTransform(sim_tf);*/
     }
 
 
@@ -307,16 +287,6 @@ class EController : public rclcpp::Node{
 
     void feedforward_callback(const geometry_msgs::msg::Wrench::SharedPtr msg){
       feedforward = *msg;
-
-      /*
-      feed_lin << feedforward.force.x,
-		  feedforward.force.y,
-		  feedforward.force.z;
-
-      feed_ang << feedforward.torque.x,
-		  feedforward.torque.y,
-		  feedforward.torque.z;
-      */
       
       if (feed_toggle) {
         feed_lin << feedforward.force.x,
@@ -364,35 +334,28 @@ class EController : public rclcpp::Node{
       K = K + 0.5*(K_dot + K_dot_prev)*0.05;
       K_dot_prev = K_dot;
 
-      // Compute control law
+      //K(1) = 2.0;
+      //K(2) = 2.0;
+
+      // Compute nominal control law
       for (int i = 0; i < 3; i++) {
 	uaux_lin(i) = -K(i) * pow(abs(sigma(i)), 0.5) * sign(sigma(i)) - k2(i) * sigma(i);
 	//uaux_lin(i) = -k1(i) * pow(abs(sigma(i)), 0.5) * sign(sigma(i)) - k2(i) * sigma(i);
       }
 
-      // Rotate control
-      //fu = -uaux_lin;
-      // Add feedforward to linear control
-      //fu = feed_lin - uaux_lin;
-      //fu = m*(feed_lin - uaux_lin);
-      //fu = -m*(feed_lin - uaux_lin);
-      
+      // Compute total control law
       fu = -m*(feed_lin - uaux_lin + lambda.cwiseProduct(e_dot_lin));
-
       fu(2) = -fu(2);
-      //fu(0) = 0.0;
-      //fu(1) = 0.0;
 
       // Saturate forces as safety
       fu(0) = std::max(-m*2.5,  std::min(m*2.5, fu(0)));
       fu(1) = std::max(-m*2.5,  std::min(m*2.5, fu(1)));
-      //fu(2) = std::max(-m*5.0,  std::min(m*5.0, fu(2)));
       fu(2) = std::max(-m*1.0,  std::min(m*1.0, fu(2)));
 
       // Add gravity compensation
       fu = fu + g_vector;
       
-      // Olivas Tesis 2.51
+      // Olivas Tesis 2.51, get desired quaternion for thrust
       if ( abs(fu.normalized().dot(ft)) == 1.0 ) { 
         qud.w() = 1.0;
       } else {
@@ -410,18 +373,28 @@ class EController : public rclcpp::Node{
       }
       qud = qud * desired_quat;
 
-      // Compute logarithmic mapping
       qe = sim_quat.inverse() * qud;
       qe.normalize();
+      
+      // Constraint to upper hemisphere
+      if (qe.w() < 0.0) {
+	qe.w() = -qe.w();
+	qe.x() = -qe.x();
+	qe.y() = -qe.y();
+	qe.z() = -qe.z();
+      }
 
-      // Sanity check qe for mag = 0
-      //double norm = sqrt(qe.x()*qe.x() + qe.y()*qe.y() + qe.z()*qe.z());
+      // Compute QLM of error quaternion
+      double norm_qe = sqrt(qe.x()*qe.x() + qe.y()*qe.y() + qe.z()*qe.z());
+      if (norm_qe < 0.0001) {
+	e_ang << 0.0, 0.0, 0.0;
+      } else {
+	double acosaux = acos(std::clamp(qe.w(), -1.0, 1.0));
+	e_ang << qe.x(), qe.y(), qe.z();
+	e_ang = 2 * e_ang.normalized() * acosaux;
+      }
 
-      //if (norm < 0.0001) {
-      //	e_ang = Eigen::Vector3d(0.0, 0.0, 0.0);
-      //} else {
-      e_ang = 2 * Eigen::Vector3d(qe.x(), qe.y(), qe.z()).normalized() * (acos(qe.w()));
-      //}
+      std::cout << "e_ang: " << e_ang.transpose() << std::endl;
 
       // Compute angular error derivative
       e_dot_ang = desired_omega - sim_omega;
@@ -434,9 +407,14 @@ class EController : public rclcpp::Node{
 
       // Castañeda ICUAS17 (39)
       flat_outputs << fu.norm(), u_ang(0), u_ang(1), u_ang(2);
-      // Pseudo inverse for custom allo
-      motor_speeds = actuation.completeOrthogonalDecomposition().pseudoInverse() * flat_outputs;
-      
+
+      // Pseudo inverse for allocation
+      motor_speeds = actuation*flat_outputs;
+      // Min motor speeds
+      motor_speeds(0) = std::max(0.0, motor_speeds(0));
+      motor_speeds(1) = std::max(0.0, motor_speeds(1));
+      motor_speeds(2) = std::max(0.0, motor_speeds(2));
+      motor_speeds(3) = std::max(0.0, motor_speeds(3));
       motor_speeds = motor_speeds.cwiseSqrt();
 
       // Publish motor speeds
@@ -448,10 +426,14 @@ class EController : public rclcpp::Node{
 	motor_speed.velocity[2] = 0.0;
 	motor_speed.velocity[3] = 0.0;
       } else {
-        motor_speed.velocity[0] = std::max(0.0, std::min(2000.0, motor_speeds(0)));
-        motor_speed.velocity[1] = std::max(0.0, std::min(2000.0, motor_speeds(1)));
-        motor_speed.velocity[2] = std::max(0.0, std::min(2000.0, motor_speeds(2)));
-        motor_speed.velocity[3] = std::max(0.0, std::min(2000.0, motor_speeds(3)));
+        motor_speed.velocity[0] = std::clamp(motor_speeds(0), 0.0, 2000.0); 
+        motor_speed.velocity[1] = std::clamp(motor_speeds(1), 0.0, 2000.0);
+        motor_speed.velocity[2] = std::clamp(motor_speeds(2), 0.0, 2000.0);
+        motor_speed.velocity[3] = std::clamp(motor_speeds(3), 0.0, 2000.0); 
+        //motor_speed.velocity[0] = std::clamp(motor_speeds(0), 400.0, 2000.0); 
+        //motor_speed.velocity[1] = std::clamp(motor_speeds(1), 400.0, 2000.0);
+        //motor_speed.velocity[2] = std::clamp(motor_speeds(2), 400.0, 2000.0);
+        //motor_speed.velocity[3] = std::clamp(motor_speeds(3), 400.0, 2000.0); 
       }
       motor_publisher->publish(motor_speed);
 
