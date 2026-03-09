@@ -59,6 +59,18 @@ class FXTTD {
     void setError(double _e_diff){ 
       e_diff = _e_diff;
     }
+    void reset(){
+      e_diff           =  0.0;
+      z_1              =  0.0; 
+      z_1_dot          =  0.0;
+      z_1_dot_previous =  0.0;
+      z_2              =  0.0;
+      z_2_dot          =  0.0;
+      z_2_dot_previous =  0.0;
+      z_3              =  0.0;
+      z_3_dot          =  0.0;
+      z_3_dot_previous =  0.0;
+    }
     // Getters
     double get_z1(){
       return z_1;
@@ -69,7 +81,13 @@ class FXTTD {
     double get_z3(){
       return z_3;
     }
-
+    double get_z1_dot(){
+      return z_1_dot;
+    }
+    void integrate_z1(){
+      z_1 = z_1 + (z_1_dot + z_1_dot_previous)*0.5*dt;
+      z_1_dot_previous = z_1_dot;
+    }
 
     // Main algo, extract before recompute, run manually on correct dt
     void compute(){
@@ -92,9 +110,10 @@ class FXTTD {
       
       // First state
       z_1_dot = z_2 + epsilon1*(sig(e_diff, (alpha + 2.0)/3.0) + sig(e_diff, (beta + 2.0)/3.0));
-      // Trapezoidal integration
-      z_1 = z_1 + (z_1_dot + z_1_dot_previous)*0.5*dt;
-      z_1_dot_previous = z_1_dot;
+      
+      // Trapezoidal integration, commented for quaternion special handling
+      //z_1 = z_1 + (z_1_dot + z_1_dot_previous)*0.5*dt;
+      //z_1_dot_previous = z_1_dot;
 
       // Variables are now exposed, extract z_1, z_2, and z_3 as estimates
     }
@@ -163,13 +182,14 @@ class FXTTD_Node : public rclcpp::Node{
       control_timer       = this->create_wall_timer(std::chrono::duration<double>(dt), std::bind(&FXTTD_Node::control_callback, this));
 
       // Init precalculated 
-      sim_pose   = Eigen::Vector3d(0.0, 0.0, 0.0);
-      sim_vel    = Eigen::Vector3d(0.0, 0.0, 0.0);
-      sim_omega  = Eigen::Vector3d(0.0, 0.0, 0.0);
-      sim_quat   = Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0);
+      sim_pose      = Eigen::Vector3d(0.0, 0.0, 0.0);
+      sim_vel       = Eigen::Vector3d(0.0, 0.0, 0.0);
+      sim_omega     = Eigen::Vector3d(0.0, 0.0, 0.0);
+      sim_quat      = Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0);
+      sim_quat_prev = Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0);
       // Init precalculated, helpers
-      vel_body   = Eigen::Quaterniond(0.0, 0.0, 0.0, 0.0);
-      vel_world  = Eigen::Quaterniond(0.0, 0.0, 0.0, 0.0);
+      vel_body      = Eigen::Quaterniond(0.0, 0.0, 0.0, 0.0);
+      vel_world     = Eigen::Quaterniond(0.0, 0.0, 0.0, 0.0);
 
       // Resize to DOFs
       e_diff.resize(6);
@@ -182,24 +202,22 @@ class FXTTD_Node : public rclcpp::Node{
       alpha.resize(6);
       beta.resize(6);
 
-      // Init algorithmic variables
+      // I_nit algorithmic variables
       e_diff     << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0; 
       z_1        << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;               
       z_2        << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;               
       z_3        << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;               
       q_hat      = Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0);
       q_e        = Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0);
+
+      q_hat_dot_prev = Eigen::Vector4d(0.0, 0.0, 0.0, 0.0);
+      q_hat_dot      = Eigen::Vector4d(0.0, 0.0, 0.0, 0.0);
 			
       // Init gains
-      epsilon1   << 60.0, 60.0, 80.0, 60.0, 60.0, 60.0; // First estimation gain
+      epsilon1   << 60.0, 60.0, 80.0, 60.0,  60.0,  60.0; // First estimation gain
       epsilon2   << 60.0, 60.0, 80.0, 180.0, 180.0, 180.0; // Second estimation gain
       epsilon3   << 60.0, 60.0, 80.0, 120.0, 120.0, 120.0; // Third estimation gain
-      //epsilon3   << 40.0, 40.0, 40.0, 40.0, 40.0, 40.0; // Third estimation gain
-      //alpha      << 0.75, 0.75, 0.75, 0.95, 0.95, 0.95; // Slow dynamics exponent gain
       alpha      << 0.75, 0.75, 0.75, 0.70, 0.70, 0.60; // Slow dynamics exponent gain
-      //beta       << 1.60, 1.60, 1.60, 1.60, 1.60, 1.60; // Fast dynamics exponent gain
-
-      //beta       << 1.75, 1.75, 1.75, 1.75, 1.75, 1.75; // Fast dynamics exponent gain
       beta       << 1.75, 1.75, 1.75, 1.50, 1.50, 1.50; // Fast dynamics exponent gain
       
       // Init algorithmic class
@@ -219,6 +237,8 @@ class FXTTD_Node : public rclcpp::Node{
                    sim_pose_msg.pose.pose.position.y,
                    sim_pose_msg.pose.pose.position.z;
 
+      sim_quat_prev = sim_quat;
+
       sim_quat.w() =  sim_pose_msg.pose.pose.orientation.w;
       sim_quat.x() =  sim_pose_msg.pose.pose.orientation.x;
       sim_quat.y() =  sim_pose_msg.pose.pose.orientation.y;
@@ -230,11 +250,11 @@ class FXTTD_Node : public rclcpp::Node{
       vel_body.y() = sim_pose_msg.twist.twist.linear.y;
       vel_body.z() = sim_pose_msg.twist.twist.linear.z;
 
-      //vel_world = sim_quat * vel_body * sim_quat.conjugate();
+      vel_world = sim_quat * vel_body * sim_quat.conjugate();
 
-      //sim_vel << vel_world.x(),
-      //		 vel_world.y(),
-      //		 vel_world.z();
+      sim_vel << vel_world.x(),
+      		 vel_world.y(),
+      		 vel_world.z();
       
       sim_vel << sim_pose_msg.twist.twist.linear.x, 
 	         sim_pose_msg.twist.twist.linear.y,
@@ -254,41 +274,96 @@ class FXTTD_Node : public rclcpp::Node{
       e_diff(1) = sim_pose(1) - z_1(1);
       e_diff(2) = sim_pose(2) - z_1(2);
 
+      // Check for sign flip
+      if (sim_quat.dot(sim_quat_prev) < 0.0){
+        sim_quat.coeffs() *= -1.0;
+      }
+
       // Compute angular error, would use normal difference, but to avoid special handling with wrapparound, compute using q_e approach
-      q_e = q_hat.conjugate() * sim_quat; 
+      q_e = q_hat.inverse() * sim_quat; 
       q_e.normalize();
+
+      if (q_e.w() < 0.0){
+        q_e.coeffs() *= -1.0;
+      }
+
+      // Print on all numbers before decimal point and only 4 after, with sign
+      //printf("q_e: %+.4f %+.4f %+.4f %+.4f\n", q_e.w(), q_e.x(), q_e.y(), q_e.z()); 
 
       //QLM
       q_e_vec = q_e.vec();
 
-      if (q_e_vec.norm() < 0.000001){
+      if (q_e_vec.norm() < 0.00001){
         q_e_vec << 0.0, 0.0, 0.0;
       } else { 
-        q_e_vec = 2.0*(q_e_vec.normalized() * acos(q_e.w()));
+	double acosaux = acos(std::clamp(q_e.w(), -1.0, 1.0));
+        q_e_vec = 2.0*(q_e_vec.normalized() * acosaux);
       }
       
       e_diff(3) = q_e_vec(0);
       e_diff(4) = q_e_vec(1);
       e_diff(5) = q_e_vec(2);
 
-      // Run FXTTD for each DOF
-      for (int i = 0; i < 6; i++){
+      //printf("e_diff: %+.4f %+.4f %+.4f \n",  e_diff(3), e_diff(4), e_diff(5));
+
+      // Run FXTTD for each linear DOF
+      for (int i = 0; i < 3; i++){
 	//FXTTDs[i].setOdom(sim_pose(i));
 	FXTTDs[i].setError(e_diff(i));
 	FXTTDs[i].compute();
+	FXTTDs[i].integrate_z1();
 	z_1(i) = FXTTDs[i].get_z1();
 	z_2(i) = FXTTDs[i].get_z2();
 	z_3(i) = FXTTDs[i].get_z3();
       }
 
+      Eigen::Vector3d z_1_dot_ang;
+
+      // Run FXTTD for each angular DOF, without z_1 integration
+      for (int i = 3; i < 6; i++){
+	FXTTDs[i].setError(e_diff(i));
+	FXTTDs[i].compute();
+	z_1_dot_ang(i-3) = FXTTDs[i].get_z1_dot();
+	z_1(i) = FXTTDs[i].get_z1();
+	z_2(i) = FXTTDs[i].get_z2();
+	z_3(i) = FXTTDs[i].get_z3();
+      }
+
+      // Integrate z_1_dot to quaternion
+      Eigen::Quaterniond z_1_dot_quat; 
+      z_1_dot_quat.w() = 0.0;
+      z_1_dot_quat.x() = z_1_dot_ang(0);
+      z_1_dot_quat.y() = z_1_dot_ang(1);
+      z_1_dot_quat.z() = z_1_dot_ang(2);
+
+      q_hat_dot = 0.5 * (q_hat * z_1_dot_quat).coeffs();
+
+      // Trapezoidal integral of q_hat_dot
+      q_hat.coeffs() += (q_hat_dot + q_hat_dot_prev)*0.5*dt;
+      q_hat.normalize();
+      q_hat_dot_prev = q_hat_dot;
+
+      // Rotate estimated linear velocity back to robot frame, to mimic odom plugin output
+      vel_world.w() = 0.0;
+      vel_world.x() = z_2(0);
+      vel_world.y() = z_2(1);
+      vel_world.z() = z_2(2);
+      vel_body = sim_quat.conjugate() * vel_world * sim_quat; 
+      z_2(0) = vel_body.x();
+      z_2(1) = vel_body.y();
+      z_2(2) = vel_body.z();
+
+      /*
       // Reconvert eta_hat to quaternion
       q_e_vec << z_1(3), z_1(4), z_1(5);
 
-      if (q_e_vec.norm() < 0.000001){
+      double angle = q_e_vec.norm();
+
+      if (angle < 0.00001){
 	q_hat = Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0);
       } else {
-        q_hat.w() = cos(q_e_vec.norm()/2.0);
-        q_e_vec   = (q_e_vec.normalized()) * sin(q_e_vec.norm()/2.0);
+        q_hat.w() = cos(angle/2.0);
+        q_e_vec   = (q_e_vec) * sin(angle/2.0)/angle;
 	q_hat.x() = q_e_vec(0);
 	q_hat.y() = q_e_vec(1);
 	q_hat.z() = q_e_vec(2);
@@ -296,6 +371,7 @@ class FXTTD_Node : public rclcpp::Node{
 
       // Normalize q_hat
       q_hat.normalize();
+      */
 
       // Publish diff pose
       diff_pose_msg.header.stamp            = this->get_clock()->now();
@@ -356,23 +432,27 @@ class FXTTD_Node : public rclcpp::Node{
     geometry_msgs::msg::TransformStamped sim_tf;
 
     // Precalculated
-    Eigen::Vector3d    sim_pose;         // Simulated position
-    Eigen::Vector3d    sim_vel;          // Simulated velocity
-    Eigen::Vector3d    sim_omega;        // Simulated angular velocity
-    Eigen::Quaterniond sim_quat;         // Simulated quaternion
+    Eigen::Vector3d    sim_pose;      // Simulated position
+    Eigen::Vector3d    sim_vel;       // Simulated velocity
+    Eigen::Vector3d    sim_omega;     // Simulated angular velocity
+    Eigen::Quaterniond sim_quat;      // Simulated quaternion
+    Eigen::Quaterniond sim_quat_prev; // Simulated quaternion previous, to check for flips
     // Precalculated, helpers
-    Eigen::Quaterniond vel_body;         // Velocity in body frame (from odom plugin)
-    Eigen::Quaterniond vel_world;        // Velocity in world frame
+    Eigen::Quaterniond vel_body;      // Velocity in body frame (from odom plugin)
+    Eigen::Quaterniond vel_world;     // Velocity in world frame
 
     // Algorithmic
-    std::vector<FXTTD> FXTTDs;           // Differentiators
+    std::vector<FXTTD> FXTTDs;        // Differentiators
     Eigen::VectorXd    e_diff;        // General differentiator error, n-dimensional, feed to class
     Eigen::VectorXd    z_1;           // First  degree diff estimate,  n-dimensional, extract from class
     Eigen::VectorXd    z_2;           // Second degree diff estimate,  n-dimensional, extract from class
     Eigen::VectorXd    z_3;           // Third  degree diff estimate,  n-dimensional, extract from class
-    Eigen::Quaterniond q_hat;            // Quaternion estimate
-    Eigen::Quaterniond q_e;              // Quaternion error
-    Eigen::Vector3d    q_e_vec;          // Quaternion error axis angle representation
+    Eigen::Quaterniond q_hat;         // Quaternion estimate
+    Eigen::Quaterniond q_e;           // Quaternion error
+    Eigen::Vector3d    q_e_vec;       // Quaternion error axis angle representation
+    
+    Eigen::Vector4d    q_hat_dot_prev;
+    Eigen::Vector4d    q_hat_dot;
   
     // Gains 
     Eigen::VectorXd    epsilon1;      // First estimation gain,        n-dimensional, feed to class

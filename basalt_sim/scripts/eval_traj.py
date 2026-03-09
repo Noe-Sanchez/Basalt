@@ -12,8 +12,8 @@ class EvalTrajectory(Node):
   def __init__(self) -> None:
     super().__init__('eval_trajectory_node')
     
-    #self.odom_publisher   = self.create_publisher(Odometry, '/control_1/reference/pose', 10)
-    self.odom_publisher   = self.create_publisher(Odometry,  '/leader/state', 10)
+    self.odom_publisher   = self.create_publisher(Odometry, '/control_1/reference/pose', 10)
+    #self.odom_publisher   = self.create_publisher(Odometry,  '/leader/state', 10)
     self.wrench_publisher = self.create_publisher(Wrench,    '/control_1/feedforward',    10)
     self.odom = Odometry()
     self.wrench = Wrench()
@@ -56,7 +56,7 @@ class EvalTrajectory(Node):
     self.ref_tf.transform.translation.y = self.odom.pose.pose.position.y
     self.ref_tf.transform.translation.z = self.odom.pose.pose.position.z
     
-    self.transform_broadcaster.sendTransform(self.ref_tf)
+    #self.transform_broadcaster.sendTransform(self.ref_tf)
 
     self.time += 0.01
 

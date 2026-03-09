@@ -265,6 +265,8 @@ class EController : public rclcpp::Node{
 
 
     void desired_pose_callback(const nav_msgs::msg::Odometry::SharedPtr msg){
+      standby = false;
+
       desired_pose = *msg;
 
       desired_pos << desired_pose.pose.pose.position.x,
@@ -303,6 +305,11 @@ class EController : public rclcpp::Node{
     }
 
     void control_callback(){
+      if (standby) {
+	desired_pos << sim_pos(0), sim_pos(1), 2.0;
+	desired_vel << 0.0, 0.0, 0.0;
+      }
+
       // Compute errors
       e_lin     = desired_pos - sim_pos;
       e_dot_lin = desired_vel - sim_vel;
@@ -488,6 +495,8 @@ class EController : public rclcpp::Node{
     // Temporal bool for feedforward toggle
     bool feed_toggle = false; 
     //bool feed_toggle = true; 
+    
+    bool standby = true;
 
     Eigen::Matrix3d    J;             // Inertia tensor, kg m^2
     Eigen::Vector3d    e_lin;         // Linear error
