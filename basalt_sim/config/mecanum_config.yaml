@@ -1,13 +1,13 @@
 # MOTORS
 
-- topic_name:     "/model/omni/command/motor_speed"
+- topic_name:     "/model/vehicle_blue/command/motor_speed"
   ros_type_name:  "actuator_msgs/msg/Actuators"
   gz_type_name:   "gz.msgs.Actuators"
   direction:      ROS_TO_GZ
 
 # ODOMETRY
 
-- topic_name:     "/model/omni/odometry"
+- topic_name:     "/model/vehicle_blue/odometry"
   ros_type_name:  "nav_msgs/msg/Odometry"
   gz_type_name:   "gz.msgs.Odometry"
   direction:      GZ_TO_ROS
