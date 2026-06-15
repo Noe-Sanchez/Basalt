@@ -19,7 +19,7 @@ def generate_launch_description():
     control_node = Node(
       package="basalt_sim",
       executable="full_control_node",
-      name=f"full_control_node_{i+1}",
+      name=f"control_node_{i+1}",
       output="screen",
       remappings=[("/control_1/reference/pose",   f"/control_{i+1}/reference/pose"),
                   ("/model/omni_1/odometry",      f"/model/omni_{i+1}/odometry"),

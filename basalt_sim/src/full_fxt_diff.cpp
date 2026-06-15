@@ -169,7 +169,8 @@ class FXTTD_Node : public rclcpp::Node{
       this->declare_parameter<std::string>("tf_namespace", "x500_1");
 
       // Subscribers
-      sim_pose_subscriber = this->create_subscription<nav_msgs::msg::Odometry>("/model/x500_1/odometry", 10, std::bind(&FXTTD_Node::sim_pose_callback,     this, std::placeholders::_1));
+      //sim_pose_subscriber = this->create_subscription<nav_msgs::msg::Odometry>("/model/x500_1/odometry", 10, std::bind(&FXTTD_Node::sim_pose_callback,     this, std::placeholders::_1));
+      sim_pose_subscriber = this->create_subscription<nav_msgs::msg::Odometry>("/model/" + this->get_parameter("tf_namespace").as_string() + "/odometry", 10, std::bind(&FXTTD_Node::sim_pose_callback,     this, std::placeholders::_1));
 
       // Publishers
       diff_pose_publisher  = this->create_publisher<nav_msgs::msg::Odometry>("/control_1/diff/odom", 10);

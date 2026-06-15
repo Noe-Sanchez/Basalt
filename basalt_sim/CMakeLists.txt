@@ -22,6 +22,15 @@ find_package(rosidl_default_generators REQUIRED)
 add_executable(control_node src/control.cpp)
 ament_target_dependencies(control_node rclcpp std_msgs geometry_msgs nav_msgs actuator_msgs visualization_msgs tf2_ros) 
 
+add_executable(full_control_node src/full_control.cpp)
+ament_target_dependencies(full_control_node rclcpp std_msgs geometry_msgs nav_msgs actuator_msgs visualization_msgs tf2_ros) 
+
+add_executable(leader_interp_node src/leader_interp.cpp)
+ament_target_dependencies(leader_interp_node rclcpp std_msgs geometry_msgs nav_msgs actuator_msgs visualization_msgs tf2_ros) 
+
+add_executable(formation_interp_node src/formation_interp.cpp)
+ament_target_dependencies(formation_interp_node rclcpp std_msgs geometry_msgs nav_msgs actuator_msgs visualization_msgs tf2_ros) 
+
 add_executable(odom_formations_node src/odom_formations.cpp)
 ament_target_dependencies(odom_formations_node rclcpp std_msgs geometry_msgs nav_msgs tf2_ros tf2_geometry_msgs crazyflie_interfaces)
 
@@ -43,12 +52,16 @@ install(PROGRAMS
   scripts/vcviz.py
   scripts/eval_traj.py
   scripts/eval_traj2.py
+  scripts/eval_traj3.py
+  scripts/full_points.py
   scripts/show_pinwheel.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
 install(TARGETS
   control_node
+  full_control_node
+  leader_interp_node
   odom_formations_node
   fields_viz_node
   fxt_diff_node
@@ -64,6 +77,6 @@ install(TARGETS
 install(DIRECTORY meshes DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
-install(DIRECTORY urdf DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY urdf   DESTINATION share/${PROJECT_NAME})
 
 ament_package()

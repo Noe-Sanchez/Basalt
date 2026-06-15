@@ -77,18 +77,18 @@ class EController : public rclcpp::Node{
       kd_lin << 5.0, 5.0, 5.0;
       ki_lin << 0.5, 0.5, 0.5;
 
-      kmin   <<     2.0,  2.0,  0.1; 
-      k1     <<     10.0, 10.0, 0.25;
+      kmin   <<     4.0,  4.0,  0.5; 
+      k1     <<     5.0,  5.0, 0.25;
       k2     <<     0.05, 0.05, 0.5; 
-      lambda <<     0.5,  0.5,  1.0;
-      mu     <<     0.75, 0.75, 0.1;
+      lambda <<     1.5,  1.5,  1.0;
+      mu     <<     0.5, 0.5, 0.1;
       sigma  <<     0.0,  0.0,  0.0;
       K      <<     0.0,  0.0,  0.0;
       K_dot  <<     0.0,  0.0,  0.0;
       K_dot_prev << 0.0,  0.0,  0.0;
       
-      kp_ang << 40.0,  40.0, 40.0;
-      kd_ang << 20.0,  20.0, 20.0;
+      kp_ang << 90.0,  90.0, 90.0;
+      kd_ang << 10.0,  10.0, 10.0;
       ki_ang << 10.0,  10.0, 10.0;
 
       e_lin         << 0.0, 0.0, 0.0;
@@ -333,12 +333,24 @@ class EController : public rclcpp::Node{
       qe = sim_quat.inverse() * qud;
       qe.normalize();
       */
+      //qe = sim_quat.inverse() * desired_quat;
+      //qe.normalize();
+
+      Eigen::Vector4d sim_parts, desired_parts;
+      sim_parts << sim_quat.w(), sim_quat.x(), sim_quat.y(), sim_quat.z();
+      desired_parts << desired_quat.w(), desired_quat.x(), desired_quat.y(), desired_quat.z();
+      if ( sim_parts.dot(desired_parts) < 0.0 ) {
+	desired_quat.w() = -desired_quat.w();
+	desired_quat.x() = -desired_quat.x();
+	desired_quat.y() = -desired_quat.y();
+	desired_quat.z() = -desired_quat.z();
+      }
       qe = sim_quat.inverse() * desired_quat;
       qe.normalize();
       
       // Constraint to upper hemisphere
       /*if (qe.w() < 0.0) {
-	qe.w() = -qe.w();
+        qe.w() = -qe.w();
 	qe.x() = -qe.x();
 	qe.y() = -qe.y();
 	qe.z() = -qe.z();
@@ -450,14 +462,14 @@ class EController : public rclcpp::Node{
 	motor_speed.velocity[5] = std::clamp(motor_speeds(5), 0.0, 4000.0);
 	motor_speed.velocity[6] = std::clamp(motor_speeds(6), 0.0, 4000.0);
 	motor_speed.velocity[7] = std::clamp(motor_speeds(7), 0.0, 4000.0);*/
-	motor_speed.velocity[0] = motor_speeds(0);
-	motor_speed.velocity[1] = motor_speeds(1);
-	motor_speed.velocity[2] = motor_speeds(2);
-	motor_speed.velocity[3] = motor_speeds(3);
-	motor_speed.velocity[4] = motor_speeds(4);
-	motor_speed.velocity[5] = motor_speeds(5);
-	motor_speed.velocity[6] = motor_speeds(6);
-	motor_speed.velocity[7] = motor_speeds(7);
+	motor_speed.velocity[0] = std::clamp(motor_speeds(0), -1000.0, 1000.0);
+	motor_speed.velocity[1] = std::clamp(motor_speeds(1), -1000.0, 1000.0);
+	motor_speed.velocity[2] = std::clamp(motor_speeds(2), -1000.0, 1000.0);
+	motor_speed.velocity[3] = std::clamp(motor_speeds(3), -1000.0, 1000.0);
+	motor_speed.velocity[4] = std::clamp(motor_speeds(4), -1000.0, 1000.0);
+	motor_speed.velocity[5] = std::clamp(motor_speeds(5), -1000.0, 1000.0);
+	motor_speed.velocity[6] = std::clamp(motor_speeds(6), -1000.0, 1000.0);
+	motor_speed.velocity[7] = std::clamp(motor_speeds(7), -1000.0, 1000.0);
         //motor_speed.velocity[0] = std::clamp(motor_speeds(0), 400.0, 2000.0); 
         //motor_speed.velocity[1] = std::clamp(motor_speeds(1), 400.0, 2000.0);
         //motor_speed.velocity[2] = std::clamp(motor_speeds(2), 400.0, 2000.0);
