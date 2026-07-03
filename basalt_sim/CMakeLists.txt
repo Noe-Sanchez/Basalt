@@ -25,6 +25,9 @@ ament_target_dependencies(control_node rclcpp std_msgs geometry_msgs nav_msgs ac
 add_executable(full_control_node src/full_control.cpp)
 ament_target_dependencies(full_control_node rclcpp std_msgs geometry_msgs nav_msgs actuator_msgs visualization_msgs tf2_ros) 
 
+add_executable(tilted_node src/tilted_control.cpp)
+ament_target_dependencies(tilted_node rclcpp std_msgs geometry_msgs nav_msgs actuator_msgs visualization_msgs tf2_ros) 
+
 add_executable(leader_interp_node src/leader_interp.cpp)
 ament_target_dependencies(leader_interp_node rclcpp std_msgs geometry_msgs nav_msgs actuator_msgs visualization_msgs tf2_ros) 
 
@@ -61,6 +64,7 @@ install(PROGRAMS
 install(TARGETS
   control_node
   full_control_node
+  tilted_node
   leader_interp_node
   odom_formations_node
   fields_viz_node

@@ -57,8 +57,8 @@ class Formations2 : public rclcpp::Node{
       // Subscribers
       desired_formation_subscriber   = this->create_subscription<geometry_msgs::msg::PoseArray>("/formation/definition", 10, std::bind(&Formations2::formation_callback,     this, std::placeholders::_1));
       formation_dot_subscriber       = this->create_subscription<geometry_msgs::msg::PoseArray>("/formation/velocity",   10, std::bind(&Formations2::formation_dot_callback, this, std::placeholders::_1));
-      //desired_leader_pose_subscriber = this->create_subscription<nav_msgs::msg::Odometry>(      "/leader/state",         10, std::bind(&Formations2::leader_pose_callback,   this, std::placeholders::_1));
-      desired_leader_pose_subscriber = this->create_subscription<nav_msgs::msg::Odometry>(      "/control_1/diff/odom",         10, std::bind(&Formations2::leader_pose_callback,   this, std::placeholders::_1));
+      desired_leader_pose_subscriber = this->create_subscription<nav_msgs::msg::Odometry>(      "/leader/state",         10, std::bind(&Formations2::leader_pose_callback,   this, std::placeholders::_1));
+      //desired_leader_pose_subscriber = this->create_subscription<nav_msgs::msg::Odometry>(      "/control_1/diff/odom",         10, std::bind(&Formations2::leader_pose_callback,   this, std::placeholders::_1));
 
       // Timer 
       //control_timer = this->create_wall_timer(50ms, std::bind(&Formations2::control_callback, this));
