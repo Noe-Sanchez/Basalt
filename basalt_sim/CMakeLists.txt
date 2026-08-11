@@ -18,6 +18,10 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(crazyflie_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(glfw3 REQUIRED)
+
+# SET MUJOCO DIR HERE
+set(MUJOCO_DIR "/root/mount/mujoco")
 
 add_executable(control_node src/control.cpp)
 ament_target_dependencies(control_node rclcpp std_msgs geometry_msgs nav_msgs actuator_msgs visualization_msgs tf2_ros) 
@@ -49,6 +53,16 @@ ament_target_dependencies(full_fxt_diff_node rclcpp std_msgs geometry_msgs nav_m
 add_executable(pttd_node src/pttd.cpp)
 ament_target_dependencies(pttd_node rclcpp std_msgs geometry_msgs nav_msgs tf2_ros)
 
+add_executable(mujoco_node src/mujoco.cpp)
+ament_target_dependencies(mujoco_node rclcpp std_msgs geometry_msgs nav_msgs actuator_msgs visualization_msgs tf2_ros)
+
+target_include_directories(mujoco_node PRIVATE
+  include
+  ${MUJOCO_DIR}/include
+)
+
+target_link_libraries(mujoco_node ${MUJOCO_DIR}/lib/libmujoco.so glfw)
+
 ament_python_install_package(${PROJECT_NAME})
 
 install(PROGRAMS
@@ -71,6 +85,7 @@ install(TARGETS
   fxt_diff_node
   full_fxt_diff_node
   pttd_node
+  mujoco_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -82,5 +97,6 @@ install(DIRECTORY meshes DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY urdf   DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY mujoco DESTINATION share/${PROJECT_NAME})
 
 ament_package()
