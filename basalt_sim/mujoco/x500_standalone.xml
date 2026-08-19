@@ -1,14 +1,6 @@
 <mujoco model="x500_base">
   <compiler angle="radian"/>
 
-  <option gravity="0 0 -9.81"/>
-
-  <asset>
-    <texture  type="skybox" builtin="gradient" rgb1="0.5 0.7 0.9" rgb2="0 0 0" width="512" height="512"/>
-    <texture  name="grid" type="2d" builtin="checker" rgb1="0.1 0.1 0.1" rgb2="0.2 0.2 0.2" width="512" height="512" mark="cross" markrgb="0.5 0.5 0.5"/>
-    <material name="grid_floor" texture="grid" texrepeat="1 1" texuniform="true"/>
-  </asset>
-
   <!-- Motor constants for physics -->
   <custom>
     <numeric name="kMotorConstant"            data="8.54858e-06"/>
@@ -24,12 +16,9 @@
   </custom>
 
   <worldbody>
-    <light pos="0 0 40" dir="0 0 -1"/>
-    <geom name="floor" type="plane" size="10 10 0.1" material="grid_floor"/>
-
     <!-- Model translation to z=0.24 derived from x500_base.sdf -->
     <body name="base_link" pos="0 0 0.24">
-      <freejoint name="base_link_freejoint"/>
+      
       <inertial pos="0 0 0" mass="2.0" diaginertia="0.02166666666666667 0.02166666666666667 0.04000000000000001"/>
 
       <!-- Visual Base Representation -->
@@ -77,6 +66,9 @@
       	<geom name="rotor_3_visual"    type="box" pos="0 0 0" euler="0 0 0" size="0.1396153846153846 0.008461538461538462 0.0014" rgba="1.0 0.5 0.0 1.0" contype="0" conaffinity="0" />
         <geom name="rotor_3_collision" type="box" pos="0 0 0" euler="0 0 0" size="0.1396153846153846 0.008461538461538462 0.0004230769230769231"/>
       </body>
+      
+      <freejoint name="base_free_joint"/>
+      
     </body>
   </worldbody>
 </mujoco>

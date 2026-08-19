@@ -1,0 +1,15 @@
+<mujoco model="x500_base">
+  <option gravity="0 0 -9.81"/>
+
+  <asset>
+    <texture  type="skybox" builtin="gradient" rgb1="0.5 0.7 0.9" rgb2="0 0 0" width="512" height="512"/>
+    <texture  name="grid" type="2d" builtin="checker" rgb1="0.1 0.1 0.1" rgb2="0.2 0.2 0.2" width="512" height="512" mark="cross" markrgb="0.5 0.5 0.5"/>
+    <material name="grid_floor" texture="grid" texrepeat="1 1" texuniform="true"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 40" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="10 10 0.1" material="grid_floor"/>
+  </worldbody>
+
+</mujoco>
