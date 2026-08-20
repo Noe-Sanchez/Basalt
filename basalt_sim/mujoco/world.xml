@@ -1,4 +1,4 @@
-<mujoco model="x500_base">
+<mujoco model="world">
   <option gravity="0 0 -9.81"/>
 
   <asset>
